@@ -51,6 +51,83 @@ void destroyInput() {
     free(locations);
 }
 
+void initInput()
+{
+    groups = (struct group *)calloc(GROUP_COUNT, sizeof(struct group));
+    if (!groups) {
+        printf("Fail to init groups");
+        exit(-1);
+    }
+    for (int I = 0; I < GROUP_COUNT; I++) {
+        groups[I].name = I;
+        groups[I].plans = (struct plan *)calloc(DISCIP_COUNT, sizeof(struct plan));
+        if (!groups[I].plans) {
+            destroyInput();
+            printf("Fail to init plan for group %d", I);
+            exit(-2);
+        }
+
+        for (int J = 0; J < DISCIP_COUNT; I++) {
+            groups[I].plans[J].count = 1;
+            groups[I].plans[J].discipline = J;
+        }
+    }
+
+    disciplines = calloc(DISCIP_COUNT, sizeof(int));
+    if (!disciplines) {
+        printf("Fail to init disciplines");
+        destroyInput();
+        exit(-3);
+    }
+    for (int I = 0; I < DISCIP_COUNT; I++) {
+        disciplines[I] = I;
+    }
+
+    teachers = (struct teacher*)calloc(TEACHER_COUNT, sizeof(struct teacher));
+    if (!teachers) {
+        printf("Fail to init teachers");
+        destroyInput();
+        exit(-4);
+    }
+    for (int I = 0; I < TEACHER_COUNT; I++) {
+        teachers[I].name = I;
+        teachers[I].employment = (struct teacherEmployment *)calloc(DISCIP_COUNT, sizeof(struct teacherEmployment));
+        if (!teachers[I].employment) {
+            printf("Fail to init teacher %d employment", I);
+            destroyInput();
+            exit(-4);
+        }
+        for (int J = 0; J < DISCIP_COUNT; J++) {
+            teachers
+        }
+    }
+
+    locations = calloc(LOCATION_COUNT, sizeof(int));
+    if (!locations) {
+        printf("Fail to init locations");
+        destroyInput();
+        exit(-5);
+    }
+    for (int I = 0; I < LOCATION_COUNT; I++) {
+        locations[I] = I;
+    }
+
+    plan = (struct line *)calloc(DISCIP_COUNT, sizeof(struct line));
+    if (!plan) {
+        printf("Fail to init plan");
+        destroyInput();
+        exit(-6);
+    }
+    for (int I = 0; I < DISCIP_COUNT; I++) {
+        plan[I].count = 1;
+        plan[I].discipline = I;
+    }
+
+    // teacherLoads = (struct load *)calloc()
+
+    printf("Success init input data");
+    return;
+}
 
 int verifyResolve(struct scheduleLine **schedules) {
     int res = 0;
