@@ -1,6 +1,8 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
 
 #define GROUP_COUNT 4
 #define DISCIP_COUNT 4
@@ -39,6 +41,11 @@ struct scheduleLine {
     int teacher;
 };
 
+struct solution {
+    struct scheduleLine schedules[GROUP_COUNT][MAX_OCCUP_IN_DAY];
+    bool resolve;
+};
+
 int groups[GROUP_COUNT];
 int disciplines[DISCIP_COUNT];
 int teacher [TEACHER_COUNT];
@@ -72,7 +79,7 @@ void init() {
     return;
 }
 
-int findLocation(struct scheduleLine **schedules, int location, int lesson) {
+int findLocation(struct scheduleLine schedules[GROUP_COUNT][MAX_OCCUP_IN_DAY], int location, int lesson) {
     int res = 0;
     for (int I = 0; I < GROUP_COUNT; I++) {
         if (schedules[I][lesson].location == location)
@@ -84,7 +91,7 @@ int findLocation(struct scheduleLine **schedules, int location, int lesson) {
     return res;
 }
 
-int findTeacher(struct scheduleLine **schedules, int teacher, int lesson) {
+int findTeacher(struct scheduleLine schedules[GROUP_COUNT][MAX_OCCUP_IN_DAY], int teacher, int lesson) {
     int res = 0;
     for (int I = 0; I < GROUP_COUNT; I++) {
         if (schedules[I][lesson].teacher == teacher) 
@@ -94,6 +101,73 @@ int findTeacher(struct scheduleLine **schedules, int teacher, int lesson) {
             break;
         }
     }
+    return res;
+}
+
+int verifyStep(struct scheduleLine schedules[GROUP_COUNT][MAX_OCCUP_IN_DAY])
+{
+    int res = 1;
+
+    for (int I = 0; I < GROUP_COUNT; I++) {
+
+        //  check window in schedule for group
+        bool startLessons = false;
+        bool endLessons = false;
+        int countLessons = 0;
+
+        for(int J = 0; J < MAX_OCCUP_IN_DAY; J++) {
+            if (schedules[I][J].state == busyLesson && !startLessons){
+                startLessons = true;
+            }
+
+            if (schedules[I][J].state == freeLesson && startLessons) {
+                endLessons = true;
+            }
+
+            //  windows of group plan
+            if (schedules[I][J].state == busyLesson && endLessons) {
+                return -1;
+            }
+
+            if (schedules[I][J].state == busyLesson && startLessons) {
+                countLessons++;
+
+                if (countLessons > MAX_OCCUP_OF_GROUP) {
+                    return -1;
+                }
+            }
+
+            if (schedules[I][J].state != freeLesson) {
+                int teacherLocation = findTeacher(schedules, schedules[I][J].teacher, J);
+                if (teacherLocation >= 2)
+                    return -1;
+
+                int locationState = findLocation(schedules, schedules[I][J].location, J);
+                if (locationState >= 2) {
+                    return -1;
+                }
+            }
+        }
+
+        for (int J = 0; J < TEACHER_COUNT; J++) {
+            int cur_teacher = J;
+            bool state = false;
+            int count = 0;
+            for (int K = 0; K < MAX_OCCUP_IN_DAY; K++) {
+                int res = findTeacher(schedules, cur_teacher, K);
+                if (res == 1)
+                    count++;
+
+                if (res == 1 && !state) {
+                    state == true;
+                }
+
+                if (count > MAX_OCCUP_OF_TEACH)
+                    return -1;
+            }
+        }
+    }
+
     return res;
 }
 
@@ -160,22 +234,98 @@ int verifyResolve(struct scheduleLine **schedules) {
                     return -1;
             }
         }
+
+    
     }
+
+    return res;
 }
 
-void direct()
+struct solution direct(struct solution current, int group, int lesson) 
 {
-    struct scheduleLine schedules[GROUP_COUNT][MAX_OCCUP_IN_DAY];
-    for (int I = 0; I < GROUP_COUNT; I++) {
-        for (int J = 0; J < MAX_OCCUP_IN_DAY; J++) {
-            schedules[I][J].state = freeLesson;
-            schedules[I][J].discipline = -1;
-            schedules[I][J].location = -1;
-            schedules[I][J].teacher = -1;
+    struct solution bad;
+    bad.resolve = false;
+    int state = verifyStep(current.schedules);
+    if (state == -1) 
+    {
+        
+        return bad;
+    }
+
+    if (state = 0) {
+        state = verifyResolve(current.schedules);
+        if (state >= 0) 
+        {
+            current.resolve = true;
+            return current;
+        }
+        return bad;
+    }
+
+    struct solution optim = current;
+    int weight = __INT_MAX__;
+
+    // перебор вариантов
+    for (int D = -1; D < DISCIP_COUNT; D++) 
+    {
+        for (int L = 0; L< LOCATION_COUNT; L++) 
+        {
+            for (int T = 0; T< TEACHER_COUNT; T++) 
+            {
+                if (D != -1) 
+                {
+                    current.schedules[group][lesson].state = busyLesson;
+                    current.schedules[group][lesson].location = L;
+                    current.schedules[group][lesson].teacher = T;
+                    current.schedules[group][lesson].discipline = D;
+                }
+                int next_group = group;
+                int next_lesson = lesson;
+                bool less = false;
+                if (lesson < MAX_OCCUP_IN_DAY) {
+                    next_lesson++;
+                    less = true;
+                } else if (group < GROUP_COUNT){
+                    next_group++;
+                    next_lesson = 0;
+                    less = true;
+                } else if (next_lesson == GROUP_COUNT - 1 && next_lesson == MAX_OCCUP_IN_DAY - 1) {
+                    less = true;
+                }
+
+                if (less) {
+                    struct solution temp = direct(current, next_group, next_lesson);
+                    if (temp.resolve) 
+                    {
+                        int curWeight = 10;
+                        if (optim.resolve == false || ((optim.resolve == true) && (curWeight < weight))) 
+                        {
+                            optim = temp;
+                            weight = curWeight;
+                        }
+                    }
+                }
+            }
         }
     }
 
-    //  перебор
+    return optim;
+}
+
+void directInit()
+{
+    struct solution start;
+    start.resolve = false;
+    for (int I = 0; I < GROUP_COUNT; I++) {
+        for (int J = 0; J < MAX_OCCUP_IN_DAY; J++) {
+            start.schedules[I][J].state = freeLesson;
+            start.schedules[I][J].discipline = -1;
+            start.schedules[I][J].location = -1;
+            start.schedules[I][J].teacher = -1;
+        }
+    }
+
+    struct solution end = direct(start, 0, 0);
 
     return;
 }
@@ -183,6 +333,6 @@ void direct()
 void main()
 {
     init();
-    direct();
+    directInit();
     return;
 }
