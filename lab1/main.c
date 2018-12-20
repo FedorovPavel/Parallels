@@ -2,14 +2,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
+#include <omp.h>
+#include <mpi.h>
 
 #define GROUP_COUNT 2
-#define DISCIP_COUNT 2
+#define DISCIP_COUNT 3
 #define TEACHER_COUNT 2
 #define LOCATION_COUNT 2
-#define MAX_OCCUP_OF_GROUP 2
-#define MAX_OCCUP_OF_TEACH 2
-#define MAX_OCCUP_IN_DAY 2
+#define MAX_OCCUP_OF_GROUP 3
+#define MAX_OCCUP_OF_TEACH 3
+#define MAX_OCCUP_IN_DAY 3
 
 enum lesson_state
 {
@@ -313,17 +316,14 @@ struct solution direct(struct solution current, int group, int lesson)
     if (state > 0)
     {
         current.resolve = true;
-        printf("up... OK\n");
         return current;
     }
     else if (state < 0)
     {
-        printf("up... FAIL\n");
         return current;
     }
     else if (state == 0 && (group == GROUP_COUNT) && (lesson == MAX_OCCUP_IN_DAY))
     {
-        printf("up... FAIL\n");
         return current;
     }
 
@@ -367,7 +367,6 @@ struct solution direct(struct solution current, int group, int lesson)
 
                 if (less)
                 {
-                    printf("down\n");
                     struct solution temp = direct(current, next_group, next_lesson);
                     if (temp.resolve)
                     {
@@ -378,7 +377,6 @@ struct solution direct(struct solution current, int group, int lesson)
                             optim = temp;
                             weight = curWeight;
                             if (curWeight == 0) {
-                                printf("up...\n");
                                 return optim;
                             }
                         }
@@ -387,7 +385,99 @@ struct solution direct(struct solution current, int group, int lesson)
             }
         }
     }
-    printf("up...\n");
+    return optim;
+}
+
+struct solution openMP(struct solution current, int group, int lesson, int thread)
+{
+    int state = verifyResolve(current.schedules, (group - 1));
+    if (state > 0)
+    {
+        current.resolve = true;
+        return current;
+    }
+    else if (state < 0)
+    {
+        return current;
+    }
+    else if (state == 0 && (group == GROUP_COUNT) && (lesson == MAX_OCCUP_IN_DAY))
+    {
+        return current;
+    }
+    struct solution optim = current;
+    int weight = __INT_MAX__;
+    bool w = false;
+
+    #pragma omp parallel num_threads(thread)
+    {
+        #pragma omp for
+        for (int D = -1; D < DISCIP_COUNT; D++)
+        {
+            if (w) {
+                #pragma omp cancel for
+            }
+            for (int L = 0; L < LOCATION_COUNT; L++)
+            {
+                if (w) {
+                    #pragma omp cancel for
+                }
+                for (int T = 0; T < TEACHER_COUNT; T++)
+                {
+                    if (w) {
+                        #pragma omp cancel for
+                    }
+                    if (D != -1)
+                    {
+                        current.schedules[group][lesson].state = busyLesson;
+                        current.schedules[group][lesson].location = L;
+                        current.schedules[group][lesson].teacher = T;
+                        current.schedules[group][lesson].discipline = D;
+                    }
+                    int next_group = group;
+                    int next_lesson = lesson;
+                    bool less = false;
+                    if (lesson < MAX_OCCUP_IN_DAY - 1)
+                    {
+                        next_lesson++;
+                        less = true;
+                    }
+                    else if (group < GROUP_COUNT - 1)
+                    {
+                        next_group++;
+                        next_lesson = 0;
+                        less = true;
+                    }
+                    else if (next_lesson == GROUP_COUNT - 1 && next_lesson == MAX_OCCUP_IN_DAY - 1)
+                    {
+                        less = true;
+                        next_group++;
+                        next_lesson++;
+                    }
+
+                    if (less)
+                    {
+                        struct solution temp = openMP(current, next_group, next_lesson, thread);
+                        if (temp.resolve)
+                        {
+                            int curWeight = getWeight(temp.schedules);
+
+                            if (curWeight >= 0 && (optim.resolve == false || ((optim.resolve == true) && (curWeight < weight))))
+                            {
+                                #pragma omp cancel for
+                                {
+                                    optim = temp;
+                                    weight = curWeight;
+                                    if (curWeight == 0) {
+                                        w = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     return optim;
 }
 
@@ -407,13 +497,64 @@ void directInit()
     }
 
     struct solution end = direct(start, 0, 0);
-    printf("end\n");
+    return;
+}
+
+void openMPInit(int threads)
+{
+    struct solution start;
+    start.resolve = false;
+    for (int I = 0; I < GROUP_COUNT; I++)
+    {
+        for (int J = 0; J < MAX_OCCUP_IN_DAY; J++)
+        {
+            start.schedules[I][J].state = freeLesson;
+            start.schedules[I][J].discipline = -1;
+            start.schedules[I][J].location = -1;
+            start.schedules[I][J].teacher = -1;
+        }
+    }
+
+    struct solution end = openMP(start, 0, 0, threads);
     return;
 }
 
 void main()
 {
     init();
-    directInit();
+    time_t start, end;
+    printf("Прямой метод:\n");
+    time(&start);
+    for (int I=0; I < 100; I++) {
+        directInit();
+    }
+    time(&end);
+
+    double diff = difftime(end, start);
+    printf("\tВремя(t): %f\n", (diff/ 100));
+    printf("\tВремя работы к числу потоков: %f\n", (diff/ 100));
+    printf("\tКПД одного потока: 100\%\n");
+
+
+    int count_proc[] = {1, 2, 3, 4, 8};
+    for (int I = 0; I < 5; I++)
+    {
+        printf("OpenMP: %d поток(-a)\n", count_proc[I]);
+        int iter = 1000;
+        if (I == 0)
+            iter = 100;
+        time(&start);
+        for (int J = 0; J < iter; J++) 
+        {
+            openMPInit(count_proc[I]);
+        }
+        time(&end);
+
+        diff = difftime(end, start);
+        printf("\tВремя(t): %f\n", (diff/ iter));
+        printf("\tВремя работы к числу потоков: %f\n", (diff/ (iter * count_proc[I])));
+        double cpd = 1.0 / count_proc[I];
+        printf("\tКПД одного потока: %.2f\%\n", cpd * 100);
+    }
     return;
 }
