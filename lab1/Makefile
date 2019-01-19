@@ -7,10 +7,10 @@ DFLAGS= -Wall -g
 all: client
 
 client: 
-	$(CC) $(RFLAGS) main.c -o a.out -fopenmp
+	$(CC) $(RFLAGS) main.c -o b.out -fopenmp
 
 debug_client: 
-	$(CC) $(DFLAGS) main.c -o a.out -fopenmp
+	$(CC) $(DFLAGS) main.c -o b.out -fopenmp
 	
 
 clean: 

@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <time.h>
 #include <omp.h>
-#include <mpi.h>
 
 #define GROUP_COUNT 2
 #define DISCIP_COUNT 3
@@ -539,7 +538,7 @@ void main()
     int count_proc[] = {1, 2, 3, 4, 8};
     for (int I = 0; I < 5; I++)
     {
-        printf("OpenMP: %d поток(-a)\n", count_proc[I]);
+        printf("MPI: %d поток(-a)\n", count_proc[I]);
         int iter = 1000;
         if (I == 0)
             iter = 100;
